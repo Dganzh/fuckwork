@@ -1,0 +1,77 @@
+本文记录搭建实时双向同步过程
+工具: inotify、 rsync
+主机: 192.168.31.111、192.168.31.112
+目录: /dir111、 /dir112
+
+
+一、搭建单向同步
+1、在192.168.31.111搭建服务端
+1) 编辑配置文件
+$ vim /etc/rsyncd.conf
+uid = root
+gid = root
+port = 7179
+use chroot = yes
+read only = no
+write only = no
+host allow = 192.168.31.112
+
+motd file = /etc/rsyncd.motd
+pid file = /var/run/rsyncd.pid
+log file = /var/log/rsyncd.log
+lock file = /var/run/rsync.lock
+
+transfer logging = yes
+log format = %t %a %m %f %b
+syslog facility = local3
+timeout = 300
+
+[test]
+path = /dir111
+list=false
+ignore errors
+auth users = root
+secretsfile = /etc/rsyncd.pwd
+
+
+2)编辑密码文件,并改权限为600
+$ echo root:123456 > /etc/rsyncd.pwd
+$ chmod 600 /etc/rsyncd.pwd
+
+3)启动rsync守护进程
+$ rsync --daemon
+
+
+2、在192.168.31.112搭建客户端
+1)安装监听工具inotify-tools
+$ yum install inotify-tools
+
+2)编辑客户端同步脚本
+$ vim /etc/rsync-bak.sh
+#!/bin/sh
+USER=root
+SRC=/dir112/
+
+HOST=192.168.31.111
+DES=test
+
+/usr/bin/inotifywait -mrq --timefmt '%d/%m/%y%H:%M'  --format '%T %w%f%e'   -e  create,delete,move,modify,attrib $SRC | while (read files); do
+rsync -avz --delete --port 7179 --password-file=/etc/rsyncctl.passwd  $SRC $USER@$HOST::$DES
+echo "${files} was rsynced">>/tmp/rsync.log 2>&1
+done
+
+
+3)编辑密码文件，并改权限为600
+$ echo 123456 > /etc/rsyncctl.pwd
+$ chmod 600 /etc/rsyncctl.pwd
+
+4)运行同步脚本
+$ nohup sh /etc/rsync-bak.sh &
+
+
+以上如果不能运行，则检查脚本是否有执行权限，没有加上就行了
+单向同步部署完成
+
+
+二、反向同样部署一遍就可以双向同步了
+
