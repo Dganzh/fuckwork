@@ -1,2 +1,2 @@
 # fuckwork
-fuck int work
+fuck in work
